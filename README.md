@@ -43,6 +43,26 @@ Once running:
 
 ---
 
+### Running with Docker (Persistent Storage)
+
+By default, Docker containers are ephemeral. To ensure that the SQLite database and all generated PDFs **persist** across container stops, restarts, and removals, use the provided Docker Compose configuration or volume mount flag:
+
+```bash
+# Option A: One-command run with Docker Compose (mounts ./data:/app/data automatically)
+docker compose up --build
+
+# Option B: Run with Docker CLI with host volume mount
+docker build -t bulk-certificate-generator .
+# On Linux/macOS:
+docker run -p 8000:8000 -v $(pwd)/data:/app/data bulk-certificate-generator
+# On Windows (PowerShell):
+docker run -p 8000:8000 -v ${PWD}/data:/app/data bulk-certificate-generator
+```
+
+All generated PDFs will be stored in `./data/generated/` and database records in `./data/certificates.db` on your host machine.
+
+---
+
 ## 2. Running Tests
 
 The test suite covers job creation, request validation, recipient-level failure isolation, PDF rendering, polling, pagination, and download flows using `pytest` and FastAPI `TestClient`:
@@ -226,15 +246,30 @@ BackgroundTasks (process_job)
 
 ---
 
-## 5. Known Limitations & Production Enhancements
+## 5. Storage Persistence & Known Limitations
 
-| Area | Current Implementation | Production Upgrade Path |
-|---|---|---|
-| **Task Queue** | In-process `FastAPI BackgroundTasks` | Celery / Temporal / AWS SQS with distributed worker cluster |
-| **Storage** | Local disk (`./generated`) | Object Storage (AWS S3, Google Cloud Storage, Azure Blob) with presigned URLs |
-| **Crash Recovery** | Uncaught crashes mark job as FAILED | Resumable jobs: worker picks up certificates with `status = 'PENDING'` upon reboot |
-| **Authentication** | Open API endpoints | API Key / OAuth2 Bearer tokens with rate-limiting per API key |
-| **Fonts & Unicode** | Standard ReportLab Type 1 fonts with Latin-1 sanitization | Register custom TrueType Fonts (TTF) like Noto Sans or DejaVu Sans for full Devanagari/CJK support |
+### Container Storage Persistence vs. Ephemeral Limitation
+- **The Ephemeral Behavior**: In standard containerized environments, any files created inside the container (such as the SQLite database `certificates.db` and rendered PDF files in `./generated`) are stored on the container's writable layer. If the container is destroyed or removed (`docker rm`), these files vanish.
+- **The Single-Node Solution (Volume Mounting)**:
+  - By mounting a host directory into the container (`-v $(pwd)/data:/app/data` or via `docker compose up`), both the SQLite database file (`/app/data/certificates.db`) and all generated PDFs (`/app/data/generated/`) live on the host filesystem.
+  - They persist indefinitely across container restarts, image upgrades, and deployments.
+- **Production Cloud Architecture (State Decoupling)**:
+  - While host volume mounts work for single-host deployments, in a multi-instance container cluster (e.g., Kubernetes, AWS ECS, Google Cloud Run), containers are distributed across multiple virtual machines that do not share a local disk.
+  - The production upgrade decouples state entirely:
+    1. **Relational Database**: Transition from SQLite to managed **PostgreSQL** (AWS RDS / Supabase) via the existing SQLAlchemy abstraction.
+    2. **Object Storage**: Store generated PDFs directly in **Amazon S3 / Google Cloud Storage** and serve temporary presigned URLs (`GET /certificates/{id}` redirects to a signed S3 URL), eliminating all local file storage bottlenecks.
+
+### Summary Matrix
+
+| Area | Current Implementation | Single-Host Volume Mount | Production Upgrade Path |
+|---|---|---|---|
+| **PDF Storage** | Local disk (`./generated`) | Host volume mount (`-v ./data:/app/data`) | Cloud Object Storage (AWS S3 / GCS) with presigned URLs |
+| **Database** | Local SQLite (`certificates.db`) | Host volume mount (`-v ./data:/app/data`) | Managed PostgreSQL (AWS RDS / Cloud SQL) |
+| **Task Queue** | In-process `FastAPI BackgroundTasks` | In-process `FastAPI BackgroundTasks` | Distributed Celery / Temporal with Redis/RabbitMQ broker |
+| **Crash Recovery** | Uncaught crashes mark job as FAILED | Uncaught crashes mark job as FAILED | Resumable worker: restarts pick up `status = 'PENDING'` |
+| **Authentication** | Open API endpoints | Open API endpoints | API Key / OAuth2 Bearer tokens with rate-limiting |
+| **Fonts & Unicode** | Standard ReportLab Type 1 fonts | Standard ReportLab Type 1 fonts | Custom TTF fonts (Noto Sans / DejaVu Sans) for CJK/Devanagari |
+
 
 ---
 

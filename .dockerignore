@@ -7,7 +7,9 @@ __pycache__/
 .coverage
 htmlcov/
 generated/
+data/
 certificates.db
 test.db
 .env
 .git/
+

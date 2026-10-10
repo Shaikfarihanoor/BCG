@@ -1,0 +1,18 @@
+version: "3.8"
+
+services:
+  certificate-generator:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: bulk-certificate-generator
+    ports:
+      - "8000:8000"
+    volumes:
+      # Mount host directory ./data to /app/data so SQLite and PDFs persist across container restarts/removals
+      - ./data:/app/data
+    environment:
+      - DATABASE_URL=sqlite:////app/data/certificates.db
+      - STORAGE_DIR=/app/data/generated
+      - MAX_RECIPIENTS_PER_JOB=1000
+    restart: unless-stopped

@@ -6,8 +6,10 @@ __pycache__/
 .coverage
 htmlcov/
 generated/
+data/
 certificates.db
 test.db
 .env
 .DS_Store
 Thumbs.db
+

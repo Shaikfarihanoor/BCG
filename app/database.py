@@ -4,10 +4,16 @@ from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from app.config import settings
 
+from pathlib import Path
+
 # SQLite requires check_same_thread=False when used across FastAPI threads/background tasks
 connect_args = {}
 if settings.DATABASE_URL.startswith("sqlite"):
     connect_args["check_same_thread"] = False
+    if settings.DATABASE_URL.startswith("sqlite:///"):
+        db_file = settings.DATABASE_URL.replace("sqlite:///", "")
+        if db_file and db_file != ":memory:":
+            Path(db_file).resolve().parent.mkdir(parents=True, exist_ok=True)
 
 engine = create_engine(
     settings.DATABASE_URL,

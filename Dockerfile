@@ -19,8 +19,19 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy source code
 COPY . .
 
+# Create volume mount directory for persistent storage
+RUN mkdir -p /app/data
+
+# Default environment variables for persistent container storage
+ENV DATABASE_URL="sqlite:////app/data/certificates.db"
+ENV STORAGE_DIR="/app/data/generated"
+
+# Declare volume mount point
+VOLUME ["/app/data"]
+
 # Expose FastAPI default port
 EXPOSE 8000
 
 # Start Uvicorn ASGI server
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+
